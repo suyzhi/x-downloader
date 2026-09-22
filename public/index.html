@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X-Downloader — 推文媒体提取</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>X-Downloader</h1>
+    <p class="sub">粘贴 X（Twitter）推文链接，提取其中的视频 / GIF / 图片 / 音频</p>
+  </header>
+
+  <section class="panel">
+    <div class="row">
+      <input id="url" type="text" placeholder="https://x.com/用户名/status/1234567890…" autocomplete="off" spellcheck="false">
+      <button id="go" class="primary">解析</button>
+    </div>
+    <div class="row opts">
+      <label>输出目录
+        <input id="outDir" type="text" placeholder="默认：X-Downloader/downloads">
+      </label>
+      <label>转换
+        <select id="mode">
+          <option value="">保持原格式</option>
+          <option value="gif:small">转 GIF · 小体积 320px</option>
+          <option value="gif:medium">转 GIF · 均衡 480px</option>
+          <option value="gif:large">转 GIF · 较清晰 540px</option>
+          <option value="gif:original">转 GIF · 原始宽度</option>
+          <option value="gif:max">转 GIF · 最高质量</option>
+          <option value="audio:m4a">只要音频 · m4a</option>
+          <option value="audio:mp3">只要音频 · mp3</option>
+          <option value="audio:wav">只要音频 · wav</option>
+        </select>
+      </label>
+    </div>
+    <div id="warn-ffmpeg" class="banner" hidden>
+      未检测到 ffmpeg —— 转 GIF / 提取音频需要它。安装：<code>winget install Gyan.FFmpeg</code>
+    </div>
+  </section>
+
+  <section id="result" hidden>
+    <div class="meta" id="meta"></div>
+    <div id="media"></div>
+    <div class="actions">
+      <button id="download" class="primary big">下载所选</button>
+      <button id="selectAll" class="ghost">全选最高画质</button>
+      <span id="hint" class="hint"></span>
+    </div>
+  </section>
+
+  <section id="log" hidden>
+    <div class="bar"><div id="barfill"></div></div>
+    <pre id="logtext"></pre>
+    <div id="done" hidden></div>
+  </section>
+
+  <footer>
+    <span>仅监听本机 127.0.0.1 · 数据不离开你的电脑</span>
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
