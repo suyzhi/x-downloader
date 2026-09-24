@@ -1,0 +1,4 @@
+# 保证 .bat / .ps1 在检出时始终是 CRLF —— cmd.exe 解析批处理依赖 CRLF
+* text=auto
+*.bat text eol=crlf
+*.ps1 text eol=crlf
