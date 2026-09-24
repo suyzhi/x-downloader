@@ -1,22 +1,22 @@
 @echo off
-chcp 65001 >nul
-title X-Downloader
+setlocal
 cd /d "%~dp0"
 
 where node >nul 2>nul
-if errorlevel 1 (
-  echo.
-  echo   未找到 Node.js，请先安装：https://nodejs.org
-  echo.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto NONODE
 
-echo.
-echo   正在启动 X-Downloader 网页界面...
-echo.
 node server.js
+goto END
 
+:NONODE
 echo.
-echo   服务已停止。
+echo   [ERROR] Node.js not found.
+echo   Please install it from: https://nodejs.org
+echo.
+pause
+exit /b 1
+
+:END
+echo.
+echo   Server stopped.
 pause
