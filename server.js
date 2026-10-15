@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * 本地 Web UI：node server.js  →  浏览器打开 http://127.0.0.1:8787
+ * 本地 Web UI：node server.js  →  浏览器打开 http://127.0.0.1:8788
  * 只监听本机回环地址，不对外暴露。
  */
 const http = require('http');
@@ -39,15 +39,42 @@ const MIME = {
 };
 
 function send(res, code, body, headers) {
+  // 不回任何 CORS 头：别的网站既读不到响应，也过不了预检
   res.writeHead(code, Object.assign({
     'cache-control': 'no-store',
-    'access-control-allow-origin': '*',
   }, headers || {}));
   res.end(body);
 }
 function sendJson(res, code, obj) {
   send(res, code, JSON.stringify(obj), { 'content-type': 'application/json; charset=utf-8' });
 }
+
+/**
+ * 跨站请求防护：带副作用的 API（POST）只接受本页面自己发起的请求。
+ *
+ * 服务虽然只监听 127.0.0.1，但用户浏览的任何网站都能让浏览器往这里发请求：
+ * text/plain 的 POST 属于「简单请求」，不触发 CORS 预检，照样会被执行，
+ * 从而触发下载、写到请求里指定的任意目录。所以这里：
+ *   - Host 必须是本机回环名，挡住 DNS 重绑定（否则恶意域名解析到 127.0.0.1 后，
+ *     Origin 与 Host 会「一致」）；
+ *   - Origin 存在时必须等于本服务自己的源（http://<Host 头>）；
+ *   - Sec-Fetch-Site 存在时只接受 same-origin / none；
+ *   - Content-Type 必须是 application/json——跨站的简单请求发不出这种类型，
+ *     要发就得先过预检，而本服务不回 CORS 头，预检必然失败。
+ * 放行返回 null，否则返回 [状态码, 错误信息]。
+ */
+function checkApiPost(req) {
+  const host = String(req.headers.host || '');
+  if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/i.test(host)) return [403, '拒绝的 Host: ' + host];
+  const origin = req.headers.origin;
+  if (origin !== undefined && origin !== 'http://' + host) return [403, '拒绝跨站请求'];
+  const site = req.headers['sec-fetch-site'];
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return [403, '拒绝跨站请求'];
+  const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return [415, '请求体必须是 application/json'];
+  return null;
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let b = '';
@@ -68,6 +95,12 @@ const server = http.createServer(async (req, res) => {
       if (!file.startsWith(PUBLIC)) return send(res, 403, 'Forbidden');
       if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return send(res, 404, 'Not Found');
       return send(res, 200, fs.readFileSync(file), { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream' });
+    }
+
+    // ---- 带副作用的 API：先过跨站检查，再读请求体 ----
+    if (req.method === 'POST' && u.pathname.startsWith('/api/')) {
+      const bad = checkApiPost(req);
+      if (bad) return sendJson(res, bad[0], { ok: false, error: bad[1] });
     }
 
     // ---- 环境自检 ----
