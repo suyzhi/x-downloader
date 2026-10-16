@@ -106,7 +106,6 @@ const server = http.createServer(async (req, res) => {
     // ---- 环境自检 ----
     if (u.pathname === '/api/env' && req.method === 'GET') {
       const ff = await convert.findFfmpeg();
-      const ffp = await convert.findFfprobe ? await convert.findFfprobe() : null;
       return sendJson(res, 200, { hasFfmpeg: !!ff, ffmpegPath: ff, ok: true });
     }
 

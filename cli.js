@@ -30,20 +30,29 @@ function throttle(fn, ms) {
 }
 
 function parseArgs(argv) {
-  const o = { urls: [], outDir: null, gif: null, audio: null, subs: null, quality: null, yes: false, list: false, all: false };
+  const o = { urls: [], outDir: null, gif: null, audio: null, subs: null, quality: null, yes: false, list: false, all: false, errors: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '-o' || a === '--out') o.outDir = argv[++i];
+    // 必须带值的选项：后面没有值（到头了或紧跟着另一个选项）记为参数错误，不再悄悄吞成 undefined
+    const value = () => {
+      const n = argv[i + 1];
+      if (n === undefined || n.startsWith('-')) { o.errors.push(a + ' 后面缺少参数值'); return null; }
+      i++;
+      return n;
+    };
+    if (a === '-o' || a === '--out') o.outDir = value();
     else if (a === '--gif') { const n = argv[i + 1]; o.gif = (n && !n.startsWith('-')) ? argv[++i] : 'medium'; }
     else if (a === '--audio') { const n = argv[i + 1]; o.audio = (n && !n.startsWith('-')) ? argv[++i] : 'm4a'; }
     // 格式参数只认 srt / vtt，免得把紧跟其后的推文链接当成格式吃掉
     else if (a === '--subs') { const n = argv[i + 1]; o.subs = (n && /^(srt|vtt)$/i.test(n)) ? argv[++i].toLowerCase() : 'srt'; }
-    else if (a === '-q' || a === '--quality') o.quality = argv[++i];
+    else if (a === '-q' || a === '--quality') o.quality = value();
     else if (a === '-y' || a === '--yes') o.yes = true;
     else if (a === '-l' || a === '--list') o.list = true;
     else if (a === '--all') o.all = true;
     else if (a === '-h' || a === '--help') o.help = true;
-    else if (!a.startsWith('-')) o.urls.push(a);
+    // 不认识的选项以前直接忽略，拼错了（如 --aduio）也照常往下跑，现在报错
+    else if (a.startsWith('-')) o.errors.push('未知选项: ' + a);
+    else o.urls.push(a);
   }
   return o;
 }
@@ -172,8 +181,9 @@ async function runOne(url, opts) {
   }
   renderAnalysis(a);
 
-  if (!a.media.length) return null;
-  if (opts.list) return { analysis: a, download: null };
+  // 返回 null 表示这条失败了（解析失败 / 缺 ffmpeg）。
+  // 没有媒体不算失败（上面已经提示过），和只列清单一样正常结束
+  if (!a.media.length || opts.list) return { analysis: a, download: null };
 
   const iface = opts.yes ? null : rl();
   let selection = [];
@@ -198,8 +208,10 @@ async function runOne(url, opts) {
   }
 
   const outDir = opts.outDir || path.join(process.cwd(), 'downloads');
-  if (opts.gif && !(await convert.findFfmpeg())) {
-    console.log(paint('yellow', ' ⚠ 未找到 ffmpeg，无法转 GIF。请先安装 ffmpeg。'));
+  // 转 GIF 和提取音频都要 ffmpeg，下载前先查：不然要等整个视频下完才报错，白下一趟。
+  // 两个都给了时下载按 GIF 处理（见 downloadSelection），提示也按 GIF 说。
+  if ((opts.gif || opts.audio) && !(await convert.findFfmpeg())) {
+    console.log(paint('yellow', ' ⚠ 未找到 ffmpeg，无法' + (opts.gif ? '转 GIF' : '提取音频') + '。请先安装 ffmpeg。'));
     return null;
   }
 
@@ -235,9 +247,22 @@ async function main() {
   const opts = parseArgs(argv);
   if (opts.help) { console.log(HELP); return; }
 
+  // 参数有错就不往下走，也不进交互模式；退出码与未捕获异常一致，都是 1
+  if (opts.errors.length) {
+    for (const e of opts.errors) console.error(paint('red', ' ✗ ' + e));
+    console.error(paint('dim', ' 用 node cli.js -h 查看全部选项'));
+    process.exitCode = 1;
+    return;
+  }
+
   if (opts.urls.length) {
-    for (const u of opts.urls) await runOne(u, opts);
+    // 逐条处理，有一条失败（链接无效、解析失败、缺 ffmpeg）就以 1 退出，方便脚本判断
+    let failed = 0;
+    for (const u of opts.urls) {
+      if (!(await runOne(u, opts))) failed++;
+    }
     console.log('');
+    if (failed) process.exitCode = 1;
     return;
   }
 
