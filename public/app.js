@@ -90,6 +90,9 @@ function render(a) {
       m.durationMs ? humanDur(m.durationMs) : null,
     ].filter(Boolean).join(' · ');
 
+    // 视频带字幕轨时标出来，自动生成的注明
+    const subs = (m.subtitles || []).map((s) => s.lang + (s.auto ? '（自动生成）' : '')).join('、');
+
     const head = document.createElement('div');
     head.className = 'card head';
     head.innerHTML =
@@ -97,6 +100,7 @@ function render(a) {
       '<div class="info">' +
         '<div>' + badge + '<span class="dimtxt">' + esc(dimtxt) + '</span></div>' +
         '<div class="dimtxt" style="margin-top:6px">媒体 #' + (i + 1) + '</div>' +
+        (subs ? '<div class="dimtxt">字幕：' + esc(subs) + '</div>' : '') +
       '</div>' +
       '<label class="check"><input type="checkbox" data-m="' + i + '" checked> 下载</label>';
     card.appendChild(head);
@@ -191,6 +195,7 @@ function startDownload() {
     selection: SELECTION,
     outDir: $('#outDir').value.trim() || null,
     gif, audio,
+    subs: $('#subs').checked ? 'srt' : null,
   };
 
   fetch('/api/download', {
@@ -249,7 +254,7 @@ function handleEvent(chunk, logtext, done) {
     obj.results.forEach((x) => {
       const d = document.createElement('div');
       d.className = 'item';
-      const kind = { video: '视频', gif: 'GIF', image: '图片', audio: '音频' }[x.kind] || x.kind;
+      const kind = { video: '视频', gif: 'GIF', image: '图片', audio: '音频', subtitle: '字幕' }[x.kind] || x.kind;
       d.innerHTML = '<span>' + kind + '</span><span class="p">' + esc(x.path) + '</span><span class="s">' + esc(x.sizeText) + '</span>';
       done.appendChild(d);
     });

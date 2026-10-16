@@ -30,12 +30,14 @@ function throttle(fn, ms) {
 }
 
 function parseArgs(argv) {
-  const o = { urls: [], outDir: null, gif: null, audio: null, quality: null, yes: false, list: false, all: false };
+  const o = { urls: [], outDir: null, gif: null, audio: null, subs: null, quality: null, yes: false, list: false, all: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-o' || a === '--out') o.outDir = argv[++i];
     else if (a === '--gif') { const n = argv[i + 1]; o.gif = (n && !n.startsWith('-')) ? argv[++i] : 'medium'; }
     else if (a === '--audio') { const n = argv[i + 1]; o.audio = (n && !n.startsWith('-')) ? argv[++i] : 'm4a'; }
+    // 格式参数只认 srt / vtt，免得把紧跟其后的推文链接当成格式吃掉
+    else if (a === '--subs') { const n = argv[i + 1]; o.subs = (n && /^(srt|vtt)$/i.test(n)) ? argv[++i].toLowerCase() : 'srt'; }
     else if (a === '-q' || a === '--quality') o.quality = argv[++i];
     else if (a === '-y' || a === '--yes') o.yes = true;
     else if (a === '-l' || a === '--list') o.list = true;
@@ -58,6 +60,7 @@ ${C.bold}选项${C.reset}
   -q, --quality <档>    画质：最高 / 1080 / 720 / 480 / 320 / 或列表序号
       --gif [预设]      转成 GIF。预设：small | medium | large | original | max
       --audio [格式]    只提取音频。格式：m4a | mp3 | wav | opus
+      --subs [格式]     视频带字幕时一并保存，放在视频旁边。格式：srt（默认）| vtt
       --all             下载全部媒体（默认只下每一项的最高画质）
   -l, --list            只列出媒体与画质，不下载
   -y, --yes             不询问，直接按默认值下载
@@ -68,6 +71,7 @@ ${C.bold}例子${C.reset}
   node cli.js https://x.com/user/status/123 --gif medium -o D:\\videos
   node cli.js https://x.com/user/status/123 --audio mp3
   node cli.js https://x.com/user/status/123 -q 720
+  node cli.js https://x.com/user/status/123 --subs
 `;
 
 function rl() {
@@ -96,6 +100,10 @@ function renderAnalysis(a) {
     const dim = m.width && m.height ? ` ${paint('dim', m.width + 'x' + m.height)}` : '';
     const dur = m.durationMs ? ` ${paint('dim', humanDuration(m.durationMs))}` : '';
     console.log(`\n ${paint('bold', '[' + (i + 1) + ']')} ${tag}${dim}${dur}`);
+    if (m.subtitles && m.subtitles.length) {
+      const subs = m.subtitles.map((s) => s.lang + (s.auto ? '（自动生成）' : '')).join('、');
+      console.log('      ' + paint('dim', '字幕: ' + subs));
+    }
     m.qualities.forEach((q, qi) => {
       const star = q.isDefault ? paint('green', ' ← 最高') : '';
       const br = q.bitrate ? paint('dim', (q.bitrate / 1000).toFixed(0) + ' kbps') : '';
@@ -200,6 +208,7 @@ async function runOne(url, opts) {
     outDir,
     gif: opts.gif,
     audio: opts.audio,
+    subs: opts.subs,
     onStatus: (s) => console.log(paint('dim', '   · ' + s)),
     onProgress: throttle((p) => {
       if (p.totalBytes) {
@@ -213,8 +222,9 @@ async function runOne(url, opts) {
   process.stdout.write('\r' + ' '.repeat(60) + '\r');
 
   for (const x of r.results) {
-    const kind = { video: paint('yellow', '视频'), gif: paint('magenta', 'GIF'), image: paint('green', '图片'), audio: paint('cyan', '音频') }[x.kind] || x.kind;
-    console.log(` ${paint('green', '✓')} ${kind}  ${path.basename(x.path)}  ${paint('dim', '(' + humanSize(x.bytes) + ')')}`);
+    const kind = { video: paint('yellow', '视频'), gif: paint('magenta', 'GIF'), image: paint('green', '图片'), audio: paint('cyan', '音频'), subtitle: paint('cyan', '字幕') }[x.kind] || x.kind;
+    const extra = x.kind === 'subtitle' ? ' · ' + x.cues + ' 条' : '';
+    console.log(` ${paint('green', '✓')} ${kind}  ${path.basename(x.path)}  ${paint('dim', '(' + humanSize(x.bytes) + extra + ')')}`);
   }
   for (const w of r.warns) console.log(paint('yellow', ' ⚠ ' + w));
   return { analysis: a, download: r };

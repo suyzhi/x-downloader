@@ -166,6 +166,7 @@ const server = http.createServer(async (req, res) => {
           outDir,
           gif: body.gif || null,
           audio: body.audio || null,
+          subs: body.subs || null,
           onStatus: (s) => emit('status', { message: s }),
           // 限流：下载一个文件会触发上千次回调，全部推给浏览器会拖慢页面
           onProgress: throttle((p) => emit('progress', {
